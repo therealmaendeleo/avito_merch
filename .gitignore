@@ -1,0 +1,7 @@
+.env
+/.venv/
+alembic.ini
+**/__pycache__/
+test.*
+.ruff_cache
+.mypy_cache
