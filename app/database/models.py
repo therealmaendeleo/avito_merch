@@ -1,6 +1,7 @@
 from datetime import datetime
+from enum import StrEnum
 
-from sqlalchemy import TIMESTAMP, BigInteger, CheckConstraint, ForeignKey, Integer, String, func
+from sqlalchemy import TIMESTAMP, Boolean, ForeignKey, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -8,97 +9,80 @@ class Base(DeclarativeBase):
     pass
 
 
-class Employee(Base):
-    """Модель сотрудника."""
+class PRStatus(StrEnum):
+    """Статус Pull Request."""
 
-    __tablename__ = 'employees'
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, comment='Имя сотрудника')
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False, comment='Хешированный пароль')
-    balance: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1000, server_default='1000', comment='Баланс монет'
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, nullable=False, server_default=func.now(), comment='Дата создания'
-    )
-
-    # Связи
-    sent_transactions: Mapped[list['Transaction']] = relationship(
-        'Transaction', foreign_keys='Transaction.sender_id', back_populates='sender'
-    )
-    received_transactions: Mapped[list['Transaction']] = relationship(
-        'Transaction', foreign_keys='Transaction.receiver_id', back_populates='receiver'
-    )
-    purchases: Mapped[list['Purchase']] = relationship('Purchase', back_populates='employee')
-
-    __table_args__ = (CheckConstraint('balance >= 0', name='check_balance_non_negative'),)
+    OPEN = 'OPEN'
+    MERGED = 'MERGED'
 
 
-class Merch(Base):
-    """Модель товара мерча."""
+class Team(Base):
+    """Модель команды."""
 
-    __tablename__ = 'merch'
+    __tablename__ = 'teams'
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, comment='Название товара')
-    price: Mapped[int] = mapped_column(Integer, nullable=False, comment='Цена в монетах')
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, nullable=False, server_default=func.now(), comment='Дата создания'
+    team_name: Mapped[str] = mapped_column(String(255), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    members: Mapped[list['User']] = relationship('User', back_populates='team')
+
+
+class User(Base):
+    """Модель пользователя (участника команды)."""
+
+    __tablename__ = 'users'
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='true')
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=func.now())
+    team_name: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey('teams.team_name', ondelete='CASCADE'),
+        nullable=False,
     )
 
-    # Связи
-    purchases: Mapped[list['Purchase']] = relationship('Purchase', back_populates='merch')
-
-    __table_args__ = (CheckConstraint('price > 0', name='check_price_positive'),)
-
-
-class Transaction(Base):
-    """Модель транзакции монет между сотрудниками."""
-
-    __tablename__ = 'transactions'
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    sender_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey('employees.id', ondelete='CASCADE'), nullable=False, comment='ID отправителя'
-    )
-    receiver_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey('employees.id', ondelete='CASCADE'), nullable=False, comment='ID получателя'
-    )
-    amount: Mapped[int] = mapped_column(Integer, nullable=False, comment='Количество монет')
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, nullable=False, server_default=func.now(), comment='Дата транзакции'
+    team: Mapped['Team'] = relationship('Team', back_populates='members')
+    authored_prs: Mapped[list['PullRequest']] = relationship('PullRequest', back_populates='author')
+    assigned_reviews: Mapped[list['PullRequestReviewer']] = relationship(
+        'PullRequestReviewer', back_populates='reviewer'
     )
 
-    # Связи
-    sender: Mapped['Employee'] = relationship('Employee', foreign_keys=[sender_id], back_populates='sent_transactions')
-    receiver: Mapped['Employee'] = relationship(
-        'Employee', foreign_keys=[receiver_id], back_populates='received_transactions'
+
+class PullRequest(Base):
+    """Модель Pull Request."""
+
+    __tablename__ = 'pull_requests'
+
+    pull_request_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    pull_request_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    author_id: Mapped[str] = mapped_column(String(255), ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=PRStatus.OPEN.value)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=func.now())
+    merged_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
+
+    author: Mapped['User'] = relationship('User', back_populates='authored_prs')
+    reviewer_assignments: Mapped[list['PullRequestReviewer']] = relationship(
+        'PullRequestReviewer', back_populates='pull_request', cascade='all, delete-orphan'
     )
 
-    __table_args__ = (CheckConstraint('amount > 0', name='check_amount_positive'),)
 
+class PullRequestReviewer(Base):
+    """Связующая таблица для назначенных ревьюверов PR (многие-ко-многим)."""
 
-class Purchase(Base):
-    """Модель покупки мерча."""
+    __tablename__ = 'pull_request_reviewers'
 
-    __tablename__ = 'purchases'
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    employee_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey('employees.id', ondelete='CASCADE'), nullable=False, comment='ID сотрудника'
+    assigned_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=func.now())
+    pull_request_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey('pull_requests.pull_request_id', ondelete='CASCADE'),
+        primary_key=True,
     )
-    merch_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey('merch.id', ondelete='RESTRICT'), nullable=False, comment='ID товара'
-    )
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment='Количество')
-    total_price: Mapped[int] = mapped_column(Integer, nullable=False, comment='Общая стоимость')
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, nullable=False, server_default=func.now(), comment='Дата покупки'
+    user_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey('users.user_id', ondelete='CASCADE'),
+        primary_key=True,
     )
 
-    # Связи
-    employee: Mapped['Employee'] = relationship('Employee', back_populates='purchases')
-    merch: Mapped['Merch'] = relationship('Merch', back_populates='purchases')
-
-    __table_args__ = (CheckConstraint('quantity > 0', name='check_quantity_positive'),)
+    pull_request: Mapped['PullRequest'] = relationship('PullRequest', back_populates='reviewer_assignments')
+    reviewer: Mapped['User'] = relationship('User', back_populates='assigned_reviews')

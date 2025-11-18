@@ -11,7 +11,7 @@ if platform.system() != 'Windows':
 
 
 def run_server() -> None:
-    logger.info(f'swagger url http://localhost:8080/docs')
+    logger.info('swagger url http://localhost:8080/docs')
     uvicorn.run(
         app='app.main:app',
         host='0.0.0.0',  # noqa: S104

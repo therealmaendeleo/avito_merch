@@ -60,13 +60,6 @@ async_engine = create_async_engine(
     pool_recycle=settings.DB_POOL_RECYCLE,
     pool_pre_ping=settings.DB_POOL_PRE_PING,
     echo=settings.DB_ECHO,
-    connect_args={
-        'command_timeout': settings.DB_COMMAND_TIMEOUT,
-        'server_settings': {
-            'statement_timeout': str(settings.DB_STATEMENT_TIMEOUT),
-            'jit': 'off',
-        },
-    },
 )
 
 session_factory = async_sessionmaker(
@@ -85,5 +78,4 @@ class BasePgInterface(ABC):  # noqa: B024
         return async_engine
 
     def async_ses(self) -> AsyncSession:
-        # выдаёт новую асинхронную сессию
         return session_factory()

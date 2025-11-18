@@ -19,7 +19,7 @@ def custom_openapi() -> dict[str, Any]:
 
     # Стандартная схема
     openapi_schema = get_openapi(
-        title='Avito Winter Internship',
+        title='Avito Internship',
         version='1.0.0',
         routes=app.routes,
     )
