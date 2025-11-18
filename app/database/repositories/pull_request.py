@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,7 +120,7 @@ class PullRequestRepo(BasePgInterface):
             return pr
 
         pr.status = PRStatus.MERGED.value
-        pr.merged_at = datetime.now(UTC)
+        pr.merged_at = datetime.now()  # timezone-naive для совместимости с TIMESTAMP WITHOUT TIME ZONE
         await session.flush()  # type: ignore
         await session.refresh(pr)  # type: ignore
         return pr
